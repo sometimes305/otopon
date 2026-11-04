@@ -24,12 +24,16 @@ button, input, textarea { font: inherit; }
 button { -webkit-tap-highlight-color: transparent; }
 
 .app-shell {
+  display: flex;
   width: min(100%, 430px);
-  min-height: 100dvh;
+  height: 100dvh;
+  min-height: 0;
+  flex-direction: column;
   margin: 0 auto;
   padding: max(14px, env(safe-area-inset-top)) 14px calc(88px + env(safe-area-inset-bottom));
   background: var(--bg);
-  overflow-x: hidden;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 .app-header { display: flex; align-items: center; justify-content: space-between; min-height: 42px; }
@@ -47,7 +51,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .volume-control svg { width: 17px; height: 17px; color: #b9c2da; }
 .volume-control input { flex: 1; min-width: 0; height: 4px; accent-color: var(--coral); }
 
-.sound-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; }
+.sound-grid { display: grid; min-height: 0; flex: 1; align-content: start; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; grid-template-columns: repeat(3, 1fr); gap: 9px; -webkit-overflow-scrolling: touch; }
 .sound-pad-wrap { position: relative; min-width: 0; }
 .sound-pad { --pad: #ff6f61; --pad-dark: #b94944; position: relative; display: flex; width: 100%; flex-direction: column; align-items: center; justify-content: center; aspect-ratio: 1.08; min-height: 86px; padding: 10px 5px 12px; overflow: hidden; border: 1px solid #ffffff2d; border-bottom: 6px solid var(--pad-dark); border-radius: 16px; color: #081120; background: var(--pad); box-shadow: 0 5px 10px #0007, inset 0 1px #ffffff5c; cursor: pointer; transform: translateY(0); transition: transform 80ms ease, border-bottom-width 80ms ease, filter 120ms ease; touch-action: manipulation; }
 .sound-pad:active, .sound-pad.is-playing { transform: translateY(4px); border-bottom-width: 2px; filter: brightness(1.08); }
