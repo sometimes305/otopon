@@ -1,6 +1,6 @@
 interface Env {
   DB: D1Database
-  AUDIO: R2Bucket
+  AUDIO: KVNamespace
   ALLOWED_ORIGINS: string
   ADMIN_TOKEN?: string
 }
@@ -21,6 +21,12 @@ interface SoundRow {
 
 type SoundColor = 'coral' | 'mint' | 'amber' | 'blue' | 'violet' | 'pink'
 type SoundStatus = 'pending' | 'approved' | 'rejected' | 'hidden'
+
+interface AudioMetadata {
+  contentType: string
+  uploaderId: string
+  originalName: string
+}
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024
 const MAX_PENDING_PER_HOUR = 3
@@ -157,8 +163,7 @@ async function createSound(request: Request, env: Env) {
   if (existing) throw new HttpError(409, '同じ音源はすでに投稿されています')
 
   await env.AUDIO.put(objectKey, bytes, {
-    httpMetadata: { contentType: mimeType, cacheControl: 'private, no-store' },
-    customMetadata: { uploaderId: user.id, originalName: file.name.slice(0, 120) },
+    metadata: { contentType: mimeType, uploaderId: user.id, originalName: file.name.slice(0, 120) },
   })
 
   try {
@@ -213,16 +218,9 @@ async function reportSound(request: Request, env: Env, soundId: string) {
 }
 
 async function streamAudio(request: Request, env: Env, soundId: string) {
-  const row = await env.DB.prepare("SELECT object_key FROM sounds WHERE id = ? AND status = 'approved'").bind(soundId).first<{ object_key: string }>()
+  const row = await env.DB.prepare("SELECT object_key, mime_type, sha256 FROM sounds WHERE id = ? AND status = 'approved'").bind(soundId).first<{ object_key: string; mime_type: string; sha256: string }>()
   if (!row) throw new HttpError(404, '音源が見つかりません')
-  const object = await env.AUDIO.get(row.object_key, { range: request.headers })
-  if (!object || !('body' in object)) throw new HttpError(404, '音声ファイルが見つかりません')
-  const headers = new Headers()
-  object.writeHttpMetadata(headers)
-  headers.set('ETag', object.httpEtag)
-  headers.set('Accept-Ranges', 'bytes')
-  headers.set('Cache-Control', 'public, max-age=86400, immutable')
-  return new Response(object.body, { status: request.headers.has('Range') ? 206 : 200, headers })
+  return streamStoredAudio(request, env, row, 'public, max-age=86400, immutable')
 }
 
 async function listAdminSounds(request: Request, env: Env) {
@@ -260,16 +258,44 @@ async function reviewSound(request: Request, env: Env, soundId: string) {
 }
 
 async function streamAdminAudio(request: Request, env: Env, soundId: string) {
-  const row = await env.DB.prepare('SELECT object_key FROM sounds WHERE id = ?').bind(soundId).first<{ object_key: string }>()
+  const row = await env.DB.prepare('SELECT object_key, mime_type, sha256 FROM sounds WHERE id = ?').bind(soundId).first<{ object_key: string; mime_type: string; sha256: string }>()
   if (!row) throw new HttpError(404, '音源が見つかりません')
-  const object = await env.AUDIO.get(row.object_key, { range: request.headers })
-  if (!object || !('body' in object)) throw new HttpError(404, '音声ファイルが見つかりません')
-  const headers = new Headers()
-  object.writeHttpMetadata(headers)
-  headers.set('ETag', object.httpEtag)
-  headers.set('Accept-Ranges', 'bytes')
-  headers.set('Cache-Control', 'private, no-store')
-  return new Response(object.body, { status: request.headers.has('Range') ? 206 : 200, headers })
+  return streamStoredAudio(request, env, row, 'private, no-store')
+}
+
+async function streamStoredAudio(
+  request: Request,
+  env: Env,
+  row: { object_key: string; mime_type: string; sha256: string },
+  cacheControl: string,
+) {
+  const stored = await env.AUDIO.getWithMetadata<AudioMetadata>(row.object_key, { type: 'arrayBuffer' })
+  if (!stored.value) throw new HttpError(404, '音声ファイルが見つかりません')
+  const total = stored.value.byteLength
+  const range = parseByteRange(request.headers.get('Range'), total)
+  const body = range ? stored.value.slice(range.start, range.end + 1) : stored.value
+  const headers = new Headers({
+    'Accept-Ranges': 'bytes',
+    'Cache-Control': cacheControl,
+    'Content-Length': String(body.byteLength),
+    'Content-Type': stored.metadata?.contentType || row.mime_type,
+    'ETag': `"${row.sha256}"`,
+  })
+  if (range) headers.set('Content-Range', `bytes ${range.start}-${range.end}/${total}`)
+  return new Response(body, { status: range ? 206 : 200, headers })
+}
+
+function parseByteRange(value: string | null, total: number) {
+  if (!value) return null
+  const match = /^bytes=(\d*)-(\d*)$/.exec(value.trim())
+  if (!match) return null
+  const [, startText, endText] = match
+  if (!startText && !endText) return null
+  let start = startText ? Number(startText) : Math.max(0, total - Number(endText))
+  let end = endText && startText ? Number(endText) : total - 1
+  if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || start >= total || end < start) return null
+  end = Math.min(end, total - 1)
+  return { start, end }
 }
 
 function publicSound(row: SoundRow, apiOrigin: string) {

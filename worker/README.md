@@ -1,6 +1,6 @@
 # 音ポン共有API
 
-Cloudflare Workers + D1 + R2で、投稿音源・いいね・通報・審査状態を管理します。
+Cloudflare Workers + D1 + Workers KVで、投稿音源・いいね・通報・審査状態を管理します。
 
 ## ローカル起動
 
@@ -13,12 +13,12 @@ npm run worker:dev
 
 ## 本番作成
 
-Cloudflareへログイン後にD1とR2を作ります。D1作成時に表示されるIDを `wrangler.jsonc` の `database_id` へ入れてください。
+Cloudflareへログイン後にD1とKV Namespaceを作ります。作成時に表示されるIDを `wrangler.jsonc` へ入れてください。
 
 ```bash
 npx wrangler login
 npx wrangler d1 create otopon-db
-npx wrangler r2 bucket create otopon-audio
+npx wrangler kv namespace create otopon-audio
 npm run worker:migrate:remote
 npx wrangler secret put ADMIN_TOKEN --config worker/wrangler.jsonc
 npx wrangler deploy --config worker/wrangler.jsonc

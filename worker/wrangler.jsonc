@@ -11,14 +11,14 @@
     {
       "binding": "DB",
       "database_name": "otopon-db",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "e4d67e0d-5231-4cf1-8218-70f143fcf3a1",
       "migrations_dir": "migrations"
     }
   ],
-  "r2_buckets": [
+  "kv_namespaces": [
     {
       "binding": "AUDIO",
-      "bucket_name": "otopon-audio"
+      "id": "680a6140605a43d388aa2c2ab7cfe05c"
     }
   ]
 }
