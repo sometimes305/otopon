@@ -1,70 +1,47 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import './App.css'
 import { AudioEngine } from './lib/audio-engine'
-import { loadCustomSounds, saveCustomSound, type StoredSound } from './lib/sound-store'
-import { SOUND_CATEGORIES, SOUND_LIBRARY, type SoundColor, type SoundDefinition } from './sounds'
-import { AddIcon, GridIcon, LogoIcon, StopIcon, VoiceIcon, VolumeIcon } from './ui/Icons'
+import { SOUND_LIBRARY, SOUND_TABS, type SoundDefinition, type SoundTabId } from './sounds'
+import { AddIcon, GridIcon, HeartIcon, LogoIcon, StopIcon, VoiceIcon, VolumeIcon } from './ui/Icons'
 import { SoundPad } from './ui/SoundPad'
 
-type ActiveView = 'box' | 'add' | 'voice'
+type ActiveView = 'box' | 'submit' | 'voice'
 
-type CustomSoundView = StoredSound & { url: string }
-
-const COLORS: SoundColor[] = ['coral', 'mint', 'amber', 'blue', 'violet', 'pink']
+const EMPTY_STATES: Record<Exclude<SoundTabId, 'all' | 'builtIn'>, { title: string; detail: string }> = {
+  community: {
+    title: '投稿音源はまだありません',
+    detail: '共有機能の公開後、ここに追加されます',
+  },
+  liked: {
+    title: 'いいねした音源はありません',
+    detail: 'ログイン機能の公開後、ここに保存されます',
+  },
+}
 
 function App() {
   const audio = useRef(new AudioEngine())
-  const mounted = useRef(false)
-  const customUrls = useRef(new Set<string>())
   const [activeView, setActiveView] = useState<ActiveView>('box')
-  const [category, setCategory] = useState('定番')
+  const [activeTab, setActiveTab] = useState<SoundTabId>('all')
   const [volume, setVolume] = useState(0.82)
   const [playingId, setPlayingId] = useState<string | null>(null)
   const [playKey, setPlayKey] = useState(0)
   const [notice, setNotice] = useState('')
-  const [customSounds, setCustomSounds] = useState<CustomSoundView[]>([])
 
   useEffect(() => {
-    mounted.current = true
     const audioEngine = audio.current
-    const urlSet = customUrls.current
-    void loadCustomSounds().then((sounds) => {
-      if (!mounted.current) return
-      const views = sounds.map((sound) => {
-        const url = URL.createObjectURL(sound.blob)
-        urlSet.add(url)
-        return { ...sound, url }
-      })
-      setCustomSounds(views)
-    })
-
-    return () => {
-      mounted.current = false
-      urlSet.forEach((url) => URL.revokeObjectURL(url))
-      urlSet.clear()
-      audioEngine.destroy()
-    }
+    return () => audioEngine.destroy()
   }, [])
 
   useEffect(() => {
     audio.current.setVolume(volume)
   }, [volume])
 
-  const allSounds = useMemo<SoundDefinition[]>(
-    () => [
-      ...SOUND_LIBRARY,
-      ...customSounds.map<SoundDefinition>((sound) => ({
-        id: sound.id,
-        label: sound.label,
-        color: sound.color,
-        category: 'マイ音源',
-        url: sound.url,
-        icon: 'custom' as const,
-        localOnly: true,
-      })),
-    ],
-    [customSounds],
-  )
+  const visibleSounds = useMemo(() => {
+    if (activeTab === 'all') return SOUND_LIBRARY
+    if (activeTab === 'builtIn') return SOUND_LIBRARY.filter((sound) => sound.source === 'builtIn')
+    if (activeTab === 'community') return SOUND_LIBRARY.filter((sound) => sound.source === 'community')
+    return SOUND_LIBRARY.filter((sound) => sound.liked)
+  }, [activeTab])
 
   const playSound = useCallback(async (sound: SoundDefinition) => {
     setNotice('')
@@ -80,24 +57,18 @@ function App() {
     }
   }, [])
 
-  const visibleSounds = allSounds.filter((sound) =>
-    category === '定番' ? !sound.localOnly : sound.category === category,
-  )
-
   const stopAll = () => {
     audio.current.stopAll()
     setPlayingId(null)
   }
 
-  const addCustomSound = async (input: { label: string; color: SoundColor; file: File }) => {
-    const stored = await saveCustomSound(input)
-    const sound = { ...stored, url: URL.createObjectURL(stored.blob) }
-    customUrls.current.add(sound.url)
-    setCustomSounds((current) => [...current, sound])
-    setCategory('マイ音源')
+  const selectTab = (tab: SoundTabId) => {
+    setActiveTab(tab)
     setActiveView('box')
-    setNotice('この端末のマイ音源へ追加しました')
+    setNotice('')
   }
+
+  const emptyState = activeTab === 'community' || activeTab === 'liked' ? EMPTY_STATES[activeTab] : null
 
   return (
     <main className="app-shell">
@@ -109,16 +80,18 @@ function App() {
         </div>
       </header>
 
-      <section className="category-tabs" aria-label="効果音カテゴリー">
-        {SOUND_CATEGORIES.map((item) => (
+      <section className="category-tabs" aria-label="音源の表示範囲" role="tablist">
+        {SOUND_TABS.map((tab) => (
           <button
-            aria-pressed={category === item}
-            className={category === item ? 'category-tab is-active' : 'category-tab'}
-            key={item}
-            onClick={() => { setCategory(item); setActiveView('box') }}
+            aria-controls="sound-grid"
+            aria-selected={activeTab === tab.id}
+            className={activeTab === tab.id ? 'category-tab is-active' : 'category-tab'}
+            key={tab.id}
+            onClick={() => selectTab(tab.id)}
+            role="tab"
             type="button"
           >
-            {item}
+            {tab.label}
           </button>
         ))}
       </section>
@@ -134,14 +107,16 @@ function App() {
         </label>
       </section>
 
-      <section className="sound-grid" aria-live="polite">
+      <section aria-label={SOUND_TABS.find((tab) => tab.id === activeTab)?.label} className="sound-grid" id="sound-grid" role="tabpanel">
         {visibleSounds.map((sound) => (
           <SoundPad active={playingId === sound.id} key={sound.id} playKey={playingId === sound.id ? playKey : 0} sound={sound} onPlay={() => void playSound(sound)} />
         ))}
-        {visibleSounds.length === 0 && (
-          <button className="empty-library" onClick={() => setActiveView('add')} type="button">
-            <AddIcon /><strong>まだ音源がありません</strong><span>最初の効果音を追加</span>
-          </button>
+        {emptyState && visibleSounds.length === 0 && (
+          <div className="empty-library">
+            {activeTab === 'community' ? <AddIcon /> : <HeartIcon />}
+            <strong>{emptyState.title}</strong>
+            <span>{emptyState.detail}</span>
+          </div>
         )}
       </section>
 
@@ -149,11 +124,11 @@ function App() {
 
       <nav className="bottom-nav" aria-label="メインメニュー">
         <NavButton active={activeView === 'box'} icon={<GridIcon />} label="ボックス" onClick={() => setActiveView('box')} />
-        <NavButton active={activeView === 'add'} icon={<AddIcon />} label="音を追加" onClick={() => setActiveView('add')} />
+        <NavButton active={activeView === 'submit'} icon={<AddIcon />} label="音を投稿" onClick={() => setActiveView('submit')} />
         <NavButton active={activeView === 'voice'} icon={<VoiceIcon />} label="ずんだもん" onClick={() => setActiveView('voice')} />
       </nav>
 
-      {activeView === 'add' && <AddSoundSheet onAdd={addCustomSound} onClose={() => setActiveView('box')} onVoice={() => setActiveView('voice')} />}
+      {activeView === 'submit' && <SubmitSoundSheet onClose={() => setActiveView('box')} />}
       {activeView === 'voice' && <VoiceSheet onClose={() => setActiveView('box')} />}
     </main>
   )
@@ -163,42 +138,16 @@ function NavButton({ active, icon, label, onClick }: { active: boolean; icon: Re
   return <button className={active ? 'nav-button is-active' : 'nav-button'} onClick={onClick} type="button">{icon}<span>{label}</span></button>
 }
 
-function AddSoundSheet({ onAdd, onClose, onVoice }: { onAdd: (input: { label: string; color: SoundColor; file: File }) => Promise<void>; onClose: () => void; onVoice: () => void }) {
-  const inputRef = useRef<HTMLInputElement>(null)
-  const [file, setFile] = useState<File | null>(null)
-  const [label, setLabel] = useState('自分の効果音')
-  const [color, setColor] = useState<SoundColor>('coral')
-  const [error, setError] = useState('')
-  const [saving, setSaving] = useState(false)
-
-  const submit = async () => {
-    if (!file) return setError('効果音ファイルを選んでください')
-    if (!file.type.startsWith('audio/')) return setError('音声ファイルを選んでください')
-    if (file.size > 5 * 1024 * 1024) return setError('5MB以下の音声を選んでください')
-    if (!label.trim()) return setError('ボタン名を入力してください')
-    setSaving(true)
-    try {
-      await onAdd({ label: label.trim().slice(0, 12), color, file })
-    } catch {
-      setError('保存できませんでした')
-      setSaving(false)
-    }
-  }
-
+function SubmitSoundSheet({ onClose }: { onClose: () => void }) {
   return (
     <div className="sheet-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section aria-labelledby="add-title" aria-modal="true" className="bottom-sheet" role="dialog">
+      <section aria-labelledby="submit-title" aria-modal="true" className="bottom-sheet submit-sheet" role="dialog">
         <div className="sheet-handle" aria-hidden="true" />
-        <div className="sheet-header"><h2 id="add-title">音を追加</h2><button onClick={onClose} type="button">閉じる</button></div>
-        <input accept="audio/*,.mp3,.wav,.ogg,.m4a" className="visually-hidden" onChange={(event) => setFile(event.target.files?.[0] ?? null)} ref={inputRef} type="file" />
-        <button className={file ? 'file-picker has-file' : 'file-picker'} onClick={() => inputRef.current?.click()} type="button">
-          <VolumeIcon /><strong>{file ? file.name : '効果音ファイルを選ぶ'}</strong><span>MP3・WAV・OGG・M4A／5MBまで</span>
-        </button>
-        <label className="field-label">ボタン名<input maxLength={12} onChange={(event) => setLabel(event.target.value)} value={label} /></label>
-        <fieldset className="color-field"><legend>ボタンの色</legend><div>{COLORS.map((item) => <button aria-label={`${item}色`} aria-pressed={color === item} className={`color-swatch color-swatch--${item}`} key={item} onClick={() => setColor(item)} type="button" />)}</div></fieldset>
-        {error && <p className="form-error" role="alert">{error}</p>}
-        <button className="primary-action" disabled={saving} onClick={() => void submit()} type="button">{saving ? '追加中…' : 'この端末に追加'}</button>
-        <div className="future-row"><VoiceIcon /><div><strong>ずんだもんにしゃべらせる</strong><span>文章から効果音をつくる機能</span></div><button onClick={onVoice} type="button">準備中</button></div>
+        <div className="sheet-header"><h2 id="submit-title">音を投稿</h2><button onClick={onClose} type="button">閉じる</button></div>
+        <div className="submit-mark"><AddIcon /></div>
+        <h3>みんなが使える音源を投稿</h3>
+        <p>音源の権利確認、通報、削除の仕組みを整えてから公開します。端末内だけに保存する機能は使用しません。</p>
+        <button className="primary-action" disabled type="button">投稿機能は準備中</button>
       </section>
     </div>
   )

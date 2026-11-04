@@ -15,6 +15,7 @@ export function VolumeIcon() { return <IconFrame><path d="M6 19h5l6 5V8l-6 5H6v6
 export function AddIcon() { return <IconFrame><path d="M16 7v18M7 16h18" stroke="currentColor" strokeLinecap="round" strokeWidth="3"/></IconFrame> }
 export function GridIcon() { return <IconFrame><rect x="6.5" y="6.5" width="8" height="8" rx="2" fill="currentColor"/><rect x="17.5" y="6.5" width="8" height="8" rx="2" fill="currentColor"/><rect x="6.5" y="17.5" width="8" height="8" rx="2" fill="currentColor"/><rect x="17.5" y="17.5" width="8" height="8" rx="2" fill="currentColor"/></IconFrame> }
 export function VoiceIcon() { return <IconFrame><path d="M10 15.5a6 6 0 0 0 12 0v-4a6 6 0 1 0-12 0v4Z" fill="currentColor"/><path d="M6.5 16a9.5 9.5 0 0 0 19 0M16 25.5V29M11 29h10" stroke="currentColor" strokeLinecap="round" strokeWidth="2.2"/></IconFrame> }
+export function HeartIcon() { return <IconFrame><path d="M16 26S6 20.3 6 12.8C6 8.8 11.2 6 16 11c4.8-5 10-2.2 10 1.8C26 20.3 16 26 16 26Z" fill="currentColor"/></IconFrame> }
 
 export function SoundIconView({ name }: { name: SoundIcon }) {
   if (name === 'clap') return <IconFrame><path d="m9 16-2-5.5c-.5-1.6 1.8-2.5 2.6-.9l2 4-1.4-6c-.4-1.8 2.3-2.4 2.8-.6l1.6 5.6-.7-6c-.2-1.8 2.6-2 2.9-.2l.8 6 1-4.2c.4-1.7 2.9-1.1 2.6.6l-1.1 6.7 2-2.1c1.3-1.3 3.2.5 2.1 2l-5.7 8a6.2 6.2 0 0 1-10.8-1.3L4.3 18c-.7-1.8 1.9-2.9 2.7-1.1L9 21" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"/></IconFrame>
