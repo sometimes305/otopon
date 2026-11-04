@@ -11,6 +11,8 @@ node_modules
 dist
 dist-ssr
 *.local
+.dev.vars
+.wrangler
 
 # Local design references are not part of the published app.
 design/

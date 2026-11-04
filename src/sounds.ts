@@ -18,6 +18,9 @@ export interface SoundDefinition {
   color: SoundColor
   source: 'builtIn' | 'community'
   liked?: boolean
+  likeCount?: number
+  author?: string
+  createdAt?: string
   url: string
   icon: SoundIcon
 }
