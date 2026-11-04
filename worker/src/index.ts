@@ -151,15 +151,15 @@ async function createSound(request: Request, env: Env) {
   await upsertUser(env, user)
   const recent = await env.DB.prepare(`
     SELECT COUNT(*) AS count FROM sounds
-    WHERE uploader_id = ? AND status = 'pending' AND created_at >= datetime('now', '-1 hour')
+    WHERE uploader_id = ? AND created_at >= datetime('now', '-1 hour')
   `).bind(user.id).first<{ count: number }>()
   if ((recent?.count || 0) >= MAX_PENDING_PER_HOUR) throw new HttpError(429, '投稿は1時間に3件までです')
 
   const id = crypto.randomUUID()
   const extension = mimeType === 'audio/wav' ? 'wav' : mimeType === 'audio/mpeg' ? 'mp3' : 'm4a'
-  const objectKey = `pending/${id}.${extension}`
+  const objectKey = `audio/${id}.${extension}`
   const hash = await sha256(bytes)
-  const existing = await env.DB.prepare("SELECT id FROM sounds WHERE sha256 = ? AND status IN ('pending', 'approved')").bind(hash).first()
+  const existing = await env.DB.prepare("SELECT id FROM sounds WHERE sha256 = ? AND status IN ('approved', 'hidden')").bind(hash).first()
   if (existing) throw new HttpError(409, '同じ音源はすでに投稿されています')
 
   await env.AUDIO.put(objectKey, bytes, {
@@ -168,15 +168,15 @@ async function createSound(request: Request, env: Env) {
 
   try {
     await env.DB.prepare(`
-      INSERT INTO sounds (id, title, color, object_key, mime_type, size_bytes, sha256, uploader_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO sounds (id, title, color, object_key, mime_type, size_bytes, sha256, uploader_id, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'approved')
     `).bind(id, title, colorForId(id), objectKey, mimeType, file.size, hash, user.id).run()
   } catch (error) {
     await env.AUDIO.delete(objectKey)
     throw error
   }
 
-  return json({ id, status: 'pending', message: '審査待ちとして受け付けました' }, 202)
+  return json({ id, status: 'approved', message: '投稿音源として公開しました' }, 201)
 }
 
 async function setLike(request: Request, env: Env, soundId: string) {
@@ -226,7 +226,7 @@ async function streamAudio(request: Request, env: Env, soundId: string) {
 async function listAdminSounds(request: Request, env: Env) {
   const url = new URL(request.url)
   const requested = url.searchParams.get('status')
-  const status: SoundStatus = requested === 'approved' || requested === 'rejected' || requested === 'hidden' ? requested : 'pending'
+  const status: SoundStatus = requested === 'pending' || requested === 'rejected' || requested === 'hidden' ? requested : 'approved'
   const result = await env.DB.prepare(`
     SELECT s.id, s.title, s.color, s.mime_type, s.size_bytes, s.uploader_id,
       u.display_name AS uploader_name, s.like_count, s.created_at, 0 AS liked, s.status

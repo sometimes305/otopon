@@ -164,7 +164,7 @@ function App() {
         <NavButton active={activeView === 'voice'} icon={<VoiceIcon />} label="ずんだもん" onClick={() => setActiveView('voice')} />
       </nav>
 
-      {activeView === 'submit' && <SubmitSoundSheet onClose={() => setActiveView('box')} onSubmitted={() => { setActiveView('box'); setNotice('投稿を受け付けました。承認後に投稿音源へ表示されます') }} user={user} />}
+      {activeView === 'submit' && <SubmitSoundSheet onClose={() => setActiveView('box')} onSubmitted={() => { setActiveView('box'); setNotice('投稿しました。投稿音源からすぐ使えます'); if (user) void loadCommunity(user) }} user={user} />}
       {activeView === 'voice' && <VoiceSheet onClose={() => setActiveView('box')} />}
     </main>
   )
@@ -176,7 +176,7 @@ function getEmptyState(activeTab: SoundTabId, status: LibraryStatus, error: stri
   if (status === 'loading' || status === 'idle') return { title: '音源を読み込み中', detail: '少しだけお待ちください' }
   if (status === 'error') return { title: '投稿音源を読み込めません', detail: error }
   if (activeTab === 'liked') return { title: 'いいねした音源はありません', detail: '投稿音源のハートを押すと、ここに保存されます' }
-  return { title: '投稿音源はまだありません', detail: '承認された音源がここに追加されます' }
+  return { title: '投稿音源はまだありません', detail: '誰かが投稿すると、ここにすぐ追加されます' }
 }
 
 function NavButton({ active, icon, label, onClick }: { active: boolean; icon: ReactNode; label: string; onClick: () => void }) {
@@ -217,14 +217,14 @@ function SubmitSoundSheet({ onClose, onSubmitted, user }: { onClose: () => void;
         <div className="sheet-header"><h2 id="submit-title">音を投稿</h2><button onClick={onClose} type="button">閉じる</button></div>
         <div className="submit-mark"><AddIcon /></div>
         <h3>みんなが使える音源を投稿</h3>
-        <p>MP3・M4A・WAV、5MB以下。投稿後は審査され、承認された音源だけ公開されます。</p>
+        <p>MP3・M4A・WAV、5MB以下。投稿すると、すぐにみんなの音ポンへ公開されます。</p>
         <form className="submit-form" onSubmit={(event) => void submit(event)}>
           <label className="field-label">音源名<input maxLength={30} onChange={(event) => setTitle(event.target.value)} placeholder="例：大成功！" value={title} /></label>
           <label className="file-picker"><input accept=".mp3,.m4a,.wav,audio/mpeg,audio/mp4,audio/wav" onChange={(event) => setFile(event.target.files?.[0] || null)} type="file" /><span>{file ? file.name : '音声ファイルを選ぶ'}</span></label>
           <label className="rights-check"><input checked={rightsConfirmed} onChange={(event) => setRightsConfirmed(event.target.checked)} type="checkbox" /><span>自作・CC0など、公開してよい権利を持つ音源です</span></label>
           {unavailable && <p className="form-message">Cloudflareの接続設定後に投稿できます</p>}
           {message && <p className="form-message is-error" role="alert">{message}</p>}
-          <button className="primary-action" disabled={unavailable || submitting || !user || !file || !title.trim() || !rightsConfirmed} type="submit">{submitting ? '送信中…' : '審査へ投稿'}</button>
+          <button className="primary-action" disabled={unavailable || submitting || !user || !file || !title.trim() || !rightsConfirmed} type="submit">{submitting ? '送信中…' : '投稿して公開'}</button>
         </form>
       </section>
     </div>

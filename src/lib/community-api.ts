@@ -31,7 +31,7 @@ export async function submitCommunitySound(input: { title: string; file: File; r
     headers: userHeaders(user),
     body: form,
   })
-  return readResponse<{ id: string; status: 'pending'; message: string }>(response)
+  return readResponse<{ id: string; status: 'approved'; message: string }>(response)
 }
 
 function userHeaders(user: GravityUser) {

@@ -17,7 +17,7 @@ CREATE TABLE sounds (
   size_bytes INTEGER NOT NULL CHECK(size_bytes > 0 AND size_bytes <= 5242880),
   sha256 TEXT NOT NULL,
   uploader_id TEXT NOT NULL REFERENCES users(id),
-  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected', 'hidden')),
+  status TEXT NOT NULL DEFAULT 'approved' CHECK(status IN ('pending', 'approved', 'rejected', 'hidden')),
   like_count INTEGER NOT NULL DEFAULT 0 CHECK(like_count >= 0),
   report_count INTEGER NOT NULL DEFAULT 0 CHECK(report_count >= 0),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,

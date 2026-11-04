@@ -1,6 +1,6 @@
 # 音ポン共有API
 
-Cloudflare Workers + D1 + Workers KVで、投稿音源・いいね・通報・審査状態を管理します。
+Cloudflare Workers + D1 + Workers KVで、投稿音源・いいね・通報・公開状態を管理します。投稿音源は保存後すぐ公開されます。
 
 ## ローカル起動
 
@@ -26,10 +26,10 @@ npx wrangler deploy --config worker/wrangler.jsonc
 
 GitHubリポジトリ変数 `VITE_API_BASE` に発行されたWorker URLを設定すると、GitHub Pages版が共有APIへ接続します。
 
-## 審査API
+## 運営API
 
-- `GET /api/admin/sounds?status=pending`
+- `GET /api/admin/sounds?status=approved`
 - `GET /api/admin/sounds/:id/audio`
-- `PUT /api/admin/sounds/:id` body: `{ "status": "approved" }`
+- `PUT /api/admin/sounds/:id` body: `{ "status": "hidden" }` または `{ "status": "rejected" }`
 
-どちらも `Authorization: Bearer <ADMIN_TOKEN>` が必要です。投稿は必ず `pending` になり、管理者が承認するまで一般一覧や音声URLから取得できません。
+どちらも `Authorization: Bearer <ADMIN_TOKEN>` が必要です。`hidden` は公開停止、`rejected` は公開停止に加えてKV上の音声ファイルも削除します。
