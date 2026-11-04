@@ -1,4 +1,4 @@
-# 音ポン共有API
+# 効果音BOX共有API
 
 Cloudflare Workers + D1 + Workers KVで、投稿音源・いいね・通報・公開状態を管理します。投稿音源は保存後すぐ公開されます。
 

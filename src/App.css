@@ -36,9 +36,6 @@ button { -webkit-tap-highlight-color: transparent; }
 .brand { display: flex; align-items: center; gap: 9px; }
 .brand h1 { margin: 0; font-size: 24px; line-height: 1; letter-spacing: -.04em; }
 .logo-icon { width: 30px; height: 30px; color: var(--coral); }
-.sync-state { display: flex; align-items: center; gap: 6px; padding: 7px 9px; border: 1px solid #294b46; border-radius: 999px; color: #a8ebd5; background: #102622; font-size: 10px; font-weight: 800; white-space: nowrap; }
-.sync-state span { width: 7px; height: 7px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 0 3px #5ed8af22; }
-
 .category-tabs { display: flex; gap: 5px; margin: 15px 0 11px; padding: 4px; background: #0e162a; border: 1px solid #1c2843; border-radius: 13px; }
 .category-tab { flex: 1; min-width: 0; padding: 9px 3px; border: 0; border-radius: 9px; color: var(--muted); background: transparent; font-size: 11px; font-weight: 800; cursor: pointer; }
 .category-tab.is-active { color: var(--text); background: #25314d; box-shadow: 0 2px 5px #0007; }

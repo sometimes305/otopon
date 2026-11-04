@@ -136,8 +136,7 @@ function App() {
   return (
     <main className="app-shell">
       <header className="app-header">
-        <div className="brand"><LogoIcon /><h1>音ポン</h1></div>
-        <div className="sync-state sync-state--connected"><span aria-hidden="true" />マイクONでルームへ</div>
+        <div className="brand"><LogoIcon /><h1>効果音BOX</h1></div>
       </header>
 
       <section className="category-tabs" aria-label="音源の表示範囲" role="tablist">
@@ -249,7 +248,7 @@ function SubmitSoundSheet({ onClose, onSubmitted, user }: { onClose: () => void;
         <div className="sheet-header"><h2 id="submit-title">音を投稿</h2><button onClick={onClose} type="button">閉じる</button></div>
         <div className="submit-mark"><AddIcon /></div>
         <h3>みんなが使える音源を投稿</h3>
-        <p>MP3・M4A・WAV、5MB以下。投稿すると、すぐにみんなの音ポンへ公開されます。</p>
+        <p>MP3・M4A・WAV、5MB以下。投稿すると、すぐにみんなの効果音BOXへ公開されます。</p>
         <form className="submit-form" onSubmit={(event) => void submit(event)}>
           <label className="field-label">音源名<input maxLength={30} onChange={(event) => setTitle(event.target.value)} placeholder="例：大成功！" value={title} /></label>
           <label className="file-picker"><input accept=".mp3,.m4a,.wav,audio/mpeg,audio/mp4,audio/wav" onChange={(event) => setFile(event.target.files?.[0] || null)} type="file" /><span>{file ? file.name : '音声ファイルを選ぶ'}</span></label>

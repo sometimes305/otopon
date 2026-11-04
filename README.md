@@ -1,4 +1,4 @@
-# 音ポン
+# 効果音BOX
 
 GRAVITYの音声ルーム内で使う、iPhone向け効果音ボックスです。GitHub Pagesへ置いたURLをGRAVITY内のローダーで開く想定です。
 

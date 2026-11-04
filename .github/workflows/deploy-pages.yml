@@ -1,4 +1,4 @@
-name: Deploy 音ポン to GitHub Pages
+name: Deploy 効果音BOX to GitHub Pages
 
 on:
   push:
