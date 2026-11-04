@@ -3,6 +3,8 @@ interface Env {
   AUDIO: KVNamespace
   ALLOWED_ORIGINS: string
   ADMIN_TOKEN?: string
+  TTS_URL?: string
+  TTS_SECRET?: string
 }
 
 interface SoundRow {
@@ -30,6 +32,11 @@ interface AudioMetadata {
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024
 const MAX_PENDING_PER_HOUR = 3
+const MAX_TTS_TEXT_LENGTH = 80
+const MAX_TTS_AUDIO_BYTES = 10 * 1024 * 1024
+const TTS_COOLDOWN_MS = 4_000
+const TTS_REQUESTS_PER_HOUR = 30
+const TTS_REQUESTS_PER_DAY = 200
 const COLORS: SoundColor[] = ['coral', 'mint', 'amber', 'blue', 'violet', 'pink']
 const BUILTIN_SOUND_IDS = [
   'tada', 'big-win', 'victory-8bit', 'level-up', 'item-get', 'game-over',
@@ -87,6 +94,11 @@ async function route(request: Request, env: Env) {
   if (request.method === 'POST' && url.pathname === '/api/sounds') {
     requireAllowedWriteOrigin(request, env)
     return createSound(request, env)
+  }
+
+  if (request.method === 'POST' && url.pathname === '/api/tts') {
+    requireAllowedWriteOrigin(request, env)
+    return synthesizeSpeech(request, env)
   }
 
   if (parts[0] === 'api' && parts[1] === 'sounds' && parts[2] && parts[3] === 'audio' && request.method === 'GET') {
@@ -193,6 +205,100 @@ async function createSound(request: Request, env: Env) {
   }
 
   return json({ id, status: 'approved', message: '投稿音源として公開しました' }, 201)
+}
+
+async function synthesizeSpeech(request: Request, env: Env) {
+  if (!env.TTS_URL || !env.TTS_SECRET) throw new HttpError(503, '読み上げ機能は現在準備中です')
+  const user = requireUser(request)
+  const body = await readJson<{ text?: unknown }>(request)
+  const text = typeof body.text === 'string'
+    ? body.text.trim().replace(/[\u0000-\u001f\u007f]/g, '')
+    : ''
+  if (!text) throw new HttpError(400, '文章を入力してください')
+  if (Array.from(text).length > MAX_TTS_TEXT_LENGTH) {
+    throw new HttpError(400, `文章は${MAX_TTS_TEXT_LENGTH}文字以内にしてください`)
+  }
+
+  await consumeTtsAllowance(env, user.id)
+  await consumeGlobalTtsAllowance(env)
+  let response: Response
+  try {
+    response = await fetch(`${env.TTS_URL.replace(/\/$/, '')}/tts`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-TTS-Secret': env.TTS_SECRET,
+      },
+      body: JSON.stringify({ text }),
+      signal: AbortSignal.timeout(110_000),
+    })
+  } catch {
+    throw new HttpError(503, '読み上げサーバーを起動できませんでした。少し待ってもう一度お試しください')
+  }
+
+  if (!response.ok) {
+    const detail = await response.json<{ error?: string }>().catch(() => null)
+    const message = detail?.error || '音声を生成できませんでした'
+    throw new HttpError(response.status >= 500 ? 503 : response.status, message)
+  }
+  if (!response.headers.get('Content-Type')?.toLowerCase().includes('audio/wav')) {
+    throw new HttpError(502, '読み上げサーバーから正しい音声が返りませんでした')
+  }
+  const declaredLength = Number(response.headers.get('Content-Length') || '0')
+  if (declaredLength > MAX_TTS_AUDIO_BYTES) throw new HttpError(502, '生成された音声が大きすぎます')
+  const audio = await response.arrayBuffer()
+  if (audio.byteLength < 12 || audio.byteLength > MAX_TTS_AUDIO_BYTES) {
+    throw new HttpError(502, '生成された音声が不正です')
+  }
+  return new Response(audio, {
+    headers: {
+      'Cache-Control': 'no-store',
+      'Content-Length': String(audio.byteLength),
+      'Content-Type': 'audio/wav',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  })
+}
+
+async function consumeTtsAllowance(env: Env, userId: string) {
+  const now = Date.now()
+  const windowStartedAt = Math.floor(now / 3_600_000) * 3_600_000
+  const accepted = await env.DB.prepare(`
+    INSERT INTO tts_rate_limits (user_id, window_started_at, request_count, last_request_at)
+    VALUES (?, ?, 1, ?)
+    ON CONFLICT(user_id) DO UPDATE SET
+      window_started_at = excluded.window_started_at,
+      request_count = CASE
+        WHEN tts_rate_limits.window_started_at = excluded.window_started_at THEN tts_rate_limits.request_count + 1
+        ELSE 1
+      END,
+      last_request_at = excluded.last_request_at
+    WHERE tts_rate_limits.window_started_at != excluded.window_started_at
+      OR (tts_rate_limits.request_count < ? AND excluded.last_request_at - tts_rate_limits.last_request_at >= ?)
+    RETURNING request_count
+  `).bind(userId, windowStartedAt, now, TTS_REQUESTS_PER_HOUR, TTS_COOLDOWN_MS).first<{ request_count: number }>()
+  if (accepted) return
+
+  const current = await env.DB.prepare(`
+    SELECT window_started_at, request_count, last_request_at FROM tts_rate_limits WHERE user_id = ?
+  `).bind(userId).first<{ window_started_at: number; request_count: number; last_request_at: number }>()
+  if (current?.window_started_at === windowStartedAt && current.request_count >= TTS_REQUESTS_PER_HOUR) {
+    throw new HttpError(429, '読み上げは1時間に30回までです')
+  }
+  const waitSeconds = current ? Math.max(1, Math.ceil((TTS_COOLDOWN_MS - (now - current.last_request_at)) / 1000)) : 4
+  throw new HttpError(429, `次の読み上げまで${waitSeconds}秒お待ちください`)
+}
+
+async function consumeGlobalTtsAllowance(env: Env) {
+  const now = Date.now()
+  const dayStartedAt = Math.floor(now / 86_400_000) * 86_400_000
+  const accepted = await env.DB.prepare(`
+    INSERT INTO tts_daily_limits (day_started_at, request_count) VALUES (?, 1)
+    ON CONFLICT(day_started_at) DO UPDATE SET request_count = tts_daily_limits.request_count + 1
+    WHERE tts_daily_limits.request_count < ?
+    RETURNING request_count
+  `).bind(dayStartedAt, TTS_REQUESTS_PER_DAY).first<{ request_count: number }>()
+  if (!accepted) throw new HttpError(429, '本日の読み上げ上限に達しました。明日またお試しください')
 }
 
 async function listBuiltInLikes(request: Request, env: Env) {

@@ -13,6 +13,8 @@ dist-ssr
 *.local
 .dev.vars
 .wrangler
+__pycache__/
+*.pyc
 
 # Local design references are not part of the published app.
 design/

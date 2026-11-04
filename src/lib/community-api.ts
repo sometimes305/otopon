@@ -50,6 +50,24 @@ export async function submitCommunitySound(input: { title: string; file: File; r
   return readResponse<{ id: string; status: 'approved'; message: string }>(response)
 }
 
+export async function synthesizeZundamon(text: string, user: GravityUser, signal?: AbortSignal) {
+  if (!API_BASE) throw new Error('読み上げ機能の接続設定がありません')
+  const response = await fetch(`${API_BASE}/api/tts`, {
+    method: 'POST',
+    headers: { ...userHeaders(user), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+    signal,
+  })
+  if (!response.ok) {
+    const data = await response.json().catch(() => null) as { error?: string } | null
+    throw new Error(data?.error || `音声を生成できませんでした（${response.status}）`)
+  }
+  if (!response.headers.get('Content-Type')?.toLowerCase().includes('audio/wav')) {
+    throw new Error('サーバーから正しい音声が返りませんでした')
+  }
+  return response.blob()
+}
+
 function userHeaders(user: GravityUser) {
   return {
     'X-Gravity-User-Id': encodeURIComponent(user.id),

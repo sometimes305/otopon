@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type RefObject } from 'react'
 import './App.css'
 import { AudioEngine } from './lib/audio-engine'
-import { communityApiConfigured, listBuiltInLikes, listCommunitySounds, setBuiltInLike, setCommunityLike, submitCommunitySound } from './lib/community-api'
+import { communityApiConfigured, listBuiltInLikes, listCommunitySounds, setBuiltInLike, setCommunityLike, submitCommunitySound, synthesizeZundamon } from './lib/community-api'
 import { getCurrentUser, type GravityUser } from './lib/gravity-user'
 import { SOUND_LIBRARY, SOUND_TABS, type SoundDefinition, type SoundTabId } from './sounds'
 import { AddIcon, GridIcon, HeartIcon, LogoIcon, StopIcon, VoiceIcon, VolumeIcon } from './ui/Icons'
@@ -183,7 +183,7 @@ function App() {
       </nav>
 
       {activeView === 'submit' && <SubmitSoundSheet onClose={() => setActiveView('box')} onSubmitted={() => { setActiveView('box'); setNotice('投稿しました。投稿音源からすぐ使えます'); if (user) void loadCommunity(user) }} user={user} />}
-      {activeView === 'voice' && <VoiceSheet onClose={() => setActiveView('box')} />}
+      {activeView === 'voice' && <VoiceSheet audioRef={audio} onClose={() => setActiveView('box')} user={user} />}
     </main>
   )
 }
@@ -262,17 +262,75 @@ function SubmitSoundSheet({ onClose, onSubmitted, user }: { onClose: () => void;
   )
 }
 
-function VoiceSheet({ onClose }: { onClose: () => void }) {
+function VoiceSheet({ audioRef, onClose, user }: { audioRef: RefObject<AudioEngine>; onClose: () => void; user: GravityUser | null }) {
+  const [text, setText] = useState('')
+  const [generating, setGenerating] = useState(false)
+  const [playing, setPlaying] = useState(false)
+  const [message, setMessage] = useState('')
+  const request = useRef<AbortController | null>(null)
+  const length = Array.from(text).length
+  const unavailable = !communityApiConfigured || !user
+
+  useEffect(() => () => request.current?.abort(), [])
+
+  const close = () => {
+    request.current?.abort()
+    audioRef.current.stopAll()
+    onClose()
+  }
+
+  const speak = async (event: FormEvent) => {
+    event.preventDefault()
+    if (playing) {
+      audioRef.current.stopAll()
+      setPlaying(false)
+      return
+    }
+    const speech = text.trim()
+    if (unavailable || !user || !speech || length > 80 || generating) return
+    setMessage('')
+    setGenerating(true)
+    const controller = new AbortController()
+    request.current = controller
+    try {
+      await audioRef.current.prepare()
+      const blob = await synthesizeZundamon(speech, user, controller.signal)
+      if (controller.signal.aborted) return
+      audioRef.current.stopAll()
+      setPlaying(true)
+      await audioRef.current.playBlob(blob, () => setPlaying(false))
+    } catch (error) {
+      if (controller.signal.aborted) return
+      setPlaying(false)
+      setMessage(error instanceof Error ? error.message : '音声を生成できませんでした')
+    } finally {
+      if (request.current === controller) request.current = null
+      if (!controller.signal.aborted) setGenerating(false)
+    }
+  }
+
   return (
-    <div className="sheet-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+    <div className="sheet-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && close()}>
       <section aria-labelledby="voice-title" aria-modal="true" className="bottom-sheet voice-sheet" role="dialog">
         <div className="sheet-handle" aria-hidden="true" />
-        <div className="sheet-header"><h2 id="voice-title">ずんだもん</h2><button onClick={onClose} type="button">閉じる</button></div>
+        <div className="sheet-header"><h2 id="voice-title">ずんだもん</h2><button onClick={close} type="button">閉じる</button></div>
         <div className="voice-mark"><VoiceIcon /></div>
         <h3>好きな言葉を効果音に</h3>
-        <p>VOICEVOX連携と共有保存は次の段階で追加します。初版では誤って別の声を使わないよう、生成ボタンを停止しています。</p>
-        <label className="field-label">しゃべらせる文章<textarea disabled placeholder="例：ゲームスタートなのだ！" rows={3} /></label>
-        <button className="primary-action" disabled type="button">準備中</button>
+        <p>ずんだもん（ノーマル）でその場で読み上げます。入力した文章と生成音声は保存しません。</p>
+        <form aria-busy={generating} className="voice-form" onSubmit={(event) => void speak(event)}>
+          <label className="field-label">
+            <span className="field-heading"><span>しゃべらせる文章</span><span className={length > 80 ? 'is-over' : ''}>{length}/80</span></span>
+            <textarea disabled={generating} maxLength={80} onChange={(event) => setText(event.target.value)} placeholder="例：ゲームスタートなのだ！" rows={3} value={text} />
+          </label>
+          <p className="voice-note">初回は読み上げサーバーの起動に30〜90秒ほどかかる場合があります。</p>
+          {!communityApiConfigured && <p className="form-message">読み上げサーバーの接続設定後に使えます</p>}
+          {communityApiConfigured && !user && <p className="form-message">GRAVITYのユーザー情報を確認中です</p>}
+          {message && <p className="form-message is-error" role="alert">{message}</p>}
+          <button className={playing ? 'primary-action is-stop' : 'primary-action'} disabled={!playing && (unavailable || generating || !text.trim() || length > 80)} type="submit">
+            {generating ? '音声を生成中…' : playing ? '読み上げを止める' : 'ずんだもんで読み上げる'}
+          </button>
+        </form>
+        <p className="voice-credit">音声：<a href="https://voicevox.hiroshiba.jp/" rel="noreferrer" target="_blank">VOICEVOX:ずんだもん</a></p>
       </section>
     </div>
   )

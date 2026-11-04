@@ -4,14 +4,19 @@ export class AudioEngine {
   private volume = 0.82
   private buffers = new Map<string, Promise<AudioBuffer>>()
   private active = new Set<AudioBufferSourceNode>()
-  private activeMedia = new Set<HTMLAudioElement>()
+  private activeMedia = new Map<HTMLAudioElement, () => void>()
 
   setVolume(volume: number) {
     this.volume = Math.max(0, Math.min(1, volume))
     if (this.context && this.master) {
       this.master.gain.setTargetAtTime(this.volume, this.context.currentTime, 0.015)
     }
-    for (const media of this.activeMedia) media.volume = this.volume
+    for (const media of this.activeMedia.keys()) media.volume = this.volume
+  }
+
+  async prepare() {
+    const context = this.ensureContext()
+    if (context?.state === 'suspended') await context.resume()
   }
 
   async play(_id: string, url: string, onEnded?: () => void) {
@@ -22,21 +27,28 @@ export class AudioEngine {
     }
 
     try {
-      if (context.state === 'suspended') await context.resume()
+      await this.prepare()
       const buffer = await this.loadBuffer(context, url)
-      const source = context.createBufferSource()
-      source.buffer = buffer
-      source.connect(this.master!)
-      this.active.add(source)
-      source.onended = () => {
-        this.active.delete(source)
-        source.disconnect()
-        onEnded?.()
-      }
-      source.start()
+      this.playBuffer(context, buffer, onEnded)
     } catch {
       await this.playWithMediaElement(url, onEnded)
     }
+  }
+
+  async playBlob(blob: Blob, onEnded?: () => void) {
+    const context = this.ensureContext()
+    if (context) {
+      try {
+        await this.prepare()
+        const buffer = await context.decodeAudioData(await blob.arrayBuffer())
+        this.playBuffer(context, buffer, onEnded)
+        return
+      } catch {
+        // iOS WebViewによってはWAVのdecodeAudioDataが失敗するためHTML Audioへ切り替える。
+      }
+    }
+    const url = URL.createObjectURL(blob)
+    await this.playWithMediaElement(url, onEnded, () => URL.revokeObjectURL(url))
   }
 
   stopAll() {
@@ -44,14 +56,7 @@ export class AudioEngine {
       try { source.stop() } catch { /* already stopped */ }
     }
     this.active.clear()
-    for (const media of this.activeMedia) {
-      media.onended = null
-      media.onerror = null
-      media.pause()
-      media.removeAttribute('src')
-      media.load()
-      media.remove()
-    }
+    for (const cleanup of [...this.activeMedia.values()]) cleanup()
     this.activeMedia.clear()
   }
 
@@ -77,19 +82,41 @@ export class AudioEngine {
     return this.context
   }
 
-  private async playWithMediaElement(url: string, onEnded?: () => void) {
+  private playBuffer(context: AudioContext, buffer: AudioBuffer, onEnded?: () => void) {
+    const source = context.createBufferSource()
+    source.buffer = buffer
+    source.connect(this.master!)
+    this.active.add(source)
+    source.onended = () => {
+      this.active.delete(source)
+      source.disconnect()
+      onEnded?.()
+    }
+    source.start()
+  }
+
+  private async playWithMediaElement(url: string, onEnded?: () => void, onDispose?: () => void) {
     const media = document.createElement('audio')
     media.src = url
     media.preload = 'auto'
     media.volume = this.volume
     media.hidden = true
     document.body.append(media)
-    this.activeMedia.add(media)
 
+    let cleaned = false
     const cleanup = () => {
+      if (cleaned) return
+      cleaned = true
       this.activeMedia.delete(media)
+      media.onended = null
+      media.onerror = null
+      media.pause()
+      media.removeAttribute('src')
+      media.load()
       media.remove()
+      onDispose?.()
     }
+    this.activeMedia.set(media, cleanup)
     media.onended = () => {
       cleanup()
       onEnded?.()
