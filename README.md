@@ -5,6 +5,7 @@ GRAVITYの音声ルーム内で使う、iPhone向け効果音ボックスです�
 ## 初版でできること
 
 - 12種類のCC0効果音をワンタップ再生
+- Web Audio非対応のWebViewではHTML Audioへ自動切替
 - 同時再生と「全停止」、端末内の音量調整
 - iPhone内の音声ファイルを「マイ音源」へ追加（IndexedDBへ端末保存、5MBまで）
 - 画面高が短いGRAVITY内WebViewにも収まる3列UI
