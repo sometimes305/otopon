@@ -28,10 +28,10 @@ export interface SoundDefinition {
 export type SoundTabId = 'all' | 'builtIn' | 'community' | 'liked'
 
 export const SOUND_TABS: Array<{ id: SoundTabId; label: string }> = [
-  { id: 'all', label: 'すべて' },
-  { id: 'builtIn', label: '初期音源' },
-  { id: 'community', label: '投稿音源' },
-  { id: 'liked', label: 'いいね' },
+  { id: 'all', label: 'すべての音' },
+  { id: 'builtIn', label: 'おすすめの音' },
+  { id: 'community', label: 'みんなの音' },
+  { id: 'liked', label: 'いいねした音' },
 ]
 
 export const SOUND_LIBRARY: SoundDefinition[] = [

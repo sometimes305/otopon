@@ -14,7 +14,7 @@ function App() {
   const audio = useRef(new AudioEngine())
   const [activeView, setActiveView] = useState<ActiveView>('box')
   const [activeTab, setActiveTab] = useState<SoundTabId>('all')
-  const [volume, setVolume] = useState(0.82)
+  const [volume, setVolume] = useState(1)
   const [playingId, setPlayingId] = useState<string | null>(null)
   const [playKey, setPlayKey] = useState(0)
   const [notice, setNotice] = useState('')
@@ -51,7 +51,7 @@ function App() {
       setLikedSounds(liked)
       setLibraryStatus('ready')
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : '投稿音源を読み込めませんでした')
+      setLibraryError(error instanceof Error ? error.message : 'みんなの音を読み込めませんでした')
       setLibraryStatus('error')
     }
   }, [])
@@ -182,7 +182,7 @@ function App() {
         <NavButton active={activeView === 'voice'} icon={<VoiceIcon />} label="ずんだもん" onClick={() => setActiveView('voice')} />
       </nav>
 
-      {activeView === 'submit' && <SubmitSoundSheet onClose={() => setActiveView('box')} onSubmitted={() => { setActiveView('box'); setNotice('投稿しました。投稿音源からすぐ使えます'); if (user) void loadCommunity(user) }} user={user} />}
+      {activeView === 'submit' && <SubmitSoundSheet onClose={() => setActiveView('box')} onSubmitted={() => { setActiveView('box'); setNotice('投稿しました。みんなの音からすぐ使えます'); if (user) void loadCommunity(user) }} user={user} />}
       {activeView === 'voice' && <VoiceSheet audioRef={audio} onClose={() => setActiveView('box')} user={user} />}
     </main>
   )
@@ -191,7 +191,7 @@ function App() {
 function CommunityLoading() {
   return (
     <div className="library-loading" role="status">
-      <div className="library-loading-label"><span aria-hidden="true" />投稿音源を読み込み中</div>
+      <div className="library-loading-label"><span aria-hidden="true" />みんなの音を読み込み中</div>
       <div aria-hidden="true" className="library-loading-grid">
         {Array.from({ length: 6 }, (_, index) => (
           <div className="sound-pad-skeleton" key={index}><i /><b /></div>
@@ -205,9 +205,9 @@ function getEmptyState(activeTab: SoundTabId, status: LibraryStatus, error: stri
   if (activeTab !== 'community' && activeTab !== 'liked') return null
   if (!communityApiConfigured) return { title: '共有基盤の接続待ち', detail: 'Cloudflareの公開URLを設定すると使えるようになります' }
   if (status === 'loading' || status === 'idle') return { title: '音源を読み込み中', detail: '少しだけお待ちください' }
-  if (status === 'error') return { title: '投稿音源を読み込めません', detail: error }
+  if (status === 'error') return { title: 'みんなの音を読み込めません', detail: error }
   if (activeTab === 'liked') return { title: 'いいねした音源はありません', detail: '音源のハートを押すと、ここに保存されます' }
-  return { title: '投稿音源はまだありません', detail: '誰かが投稿すると、ここにすぐ追加されます' }
+  return { title: 'みんなの音はまだありません', detail: '誰かが投稿すると、ここにすぐ追加されます' }
 }
 
 function NavButton({ active, icon, label, onClick }: { active: boolean; icon: ReactNode; label: string; onClick: () => void }) {

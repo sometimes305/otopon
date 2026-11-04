@@ -1,8 +1,8 @@
 export class AudioEngine {
-  private static readonly MAX_OUTPUT_VOLUME = 0.3
+  private static readonly MAX_OUTPUT_VOLUME = 0.09
   private context: AudioContext | null = null
   private master: GainNode | null = null
-  private volume = 0.82
+  private volume = 1
   private buffers = new Map<string, Promise<AudioBuffer>>()
   private active = new Set<AudioBufferSourceNode>()
   private activeMedia = new Map<HTMLAudioElement, () => void>()

@@ -41,7 +41,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .brand h1 { margin: 0; font-size: 24px; line-height: 1; letter-spacing: -.04em; }
 .logo-icon { width: 30px; height: 30px; color: var(--coral); }
 .category-tabs { display: flex; gap: 5px; margin: 15px 0 11px; padding: 4px; background: #0e162a; border: 1px solid #1c2843; border-radius: 13px; }
-.category-tab { flex: 1; min-width: 0; padding: 9px 3px; border: 0; border-radius: 9px; color: var(--muted); background: transparent; font-size: 11px; font-weight: 800; cursor: pointer; }
+.category-tab { flex: 1; min-width: 0; padding: 9px 1px; border: 0; border-radius: 9px; color: var(--muted); background: transparent; font-size: 10px; font-weight: 800; white-space: nowrap; cursor: pointer; }
 .category-tab.is-active { color: var(--text); background: #25314d; box-shadow: 0 2px 5px #0007; }
 
 .mixer-strip { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
