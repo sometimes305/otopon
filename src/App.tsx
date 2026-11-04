@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import './App.css'
 import { AudioEngine } from './lib/audio-engine'
-import { communityApiConfigured, listCommunitySounds, setCommunityLike, submitCommunitySound } from './lib/community-api'
+import { communityApiConfigured, listBuiltInLikes, listCommunitySounds, setBuiltInLike, setCommunityLike, submitCommunitySound } from './lib/community-api'
 import { getCurrentUser, type GravityUser } from './lib/gravity-user'
 import { SOUND_LIBRARY, SOUND_TABS, type SoundDefinition, type SoundTabId } from './sounds'
 import { AddIcon, GridIcon, HeartIcon, LogoIcon, StopIcon, VoiceIcon, VolumeIcon } from './ui/Icons'
@@ -19,6 +19,7 @@ function App() {
   const [playKey, setPlayKey] = useState(0)
   const [notice, setNotice] = useState('')
   const [user, setUser] = useState<GravityUser | null>(null)
+  const [builtInSounds, setBuiltInSounds] = useState<SoundDefinition[]>(SOUND_LIBRARY)
   const [communitySounds, setCommunitySounds] = useState<SoundDefinition[]>([])
   const [likedSounds, setLikedSounds] = useState<SoundDefinition[]>([])
   const [libraryStatus, setLibraryStatus] = useState<LibraryStatus>('idle')
@@ -39,10 +40,13 @@ function App() {
     setLibraryStatus('loading')
     setLibraryError('')
     try {
-      const [community, liked] = await Promise.all([
+      const [community, liked, builtInLikes] = await Promise.all([
         listCommunitySounds('community', currentUser),
         listCommunitySounds('liked', currentUser),
+        listBuiltInLikes(currentUser),
       ])
+      const builtInLikeMap = new Map(builtInLikes.map((like) => [like.id, like]))
+      setBuiltInSounds(SOUND_LIBRARY.map((sound) => ({ ...sound, ...builtInLikeMap.get(sound.id) })))
       setCommunitySounds(community)
       setLikedSounds(liked)
       setLibraryStatus('ready')
@@ -59,11 +63,11 @@ function App() {
   }, [loadCommunity, user])
 
   const visibleSounds = useMemo(() => {
-    if (activeTab === 'all') return [...SOUND_LIBRARY, ...communitySounds]
-    if (activeTab === 'builtIn') return SOUND_LIBRARY
+    if (activeTab === 'all') return [...builtInSounds, ...communitySounds]
+    if (activeTab === 'builtIn') return builtInSounds
     if (activeTab === 'community') return communitySounds
-    return likedSounds
-  }, [activeTab, communitySounds, likedSounds])
+    return [...builtInSounds.filter((sound) => sound.liked), ...likedSounds]
+  }, [activeTab, builtInSounds, communitySounds, likedSounds])
 
   const playSound = useCallback(async (sound: SoundDefinition) => {
     setNotice('')
@@ -79,9 +83,13 @@ function App() {
     }
   }, [])
 
-  const updateSoundLike = (id: string, liked: boolean, likeCount: number) => {
-    setCommunitySounds((current) => current.map((sound) => sound.id === id ? { ...sound, liked, likeCount } : sound))
-    setLikedSounds((current) => current.map((sound) => sound.id === id ? { ...sound, liked, likeCount } : sound))
+  const updateSoundLike = (sound: SoundDefinition, liked: boolean, likeCount: number) => {
+    if (sound.source === 'builtIn') {
+      setBuiltInSounds((current) => current.map((item) => item.id === sound.id ? { ...item, liked, likeCount } : item))
+      return
+    }
+    setCommunitySounds((current) => current.map((item) => item.id === sound.id ? { ...item, liked, likeCount } : item))
+    setLikedSounds((current) => current.map((item) => item.id === sound.id ? { ...item, liked, likeCount } : item))
   }
 
   const toggleLike = async (sound: SoundDefinition) => {
@@ -89,19 +97,21 @@ function App() {
     const nextLiked = !sound.liked
     const previousCount = sound.likeCount || 0
     const optimisticCount = Math.max(0, previousCount + (nextLiked ? 1 : -1))
-    updateSoundLike(sound.id, nextLiked, optimisticCount)
-    if (nextLiked) {
+    updateSoundLike(sound, nextLiked, optimisticCount)
+    if (sound.source === 'community' && nextLiked) {
       setLikedSounds((current) => [{ ...sound, liked: true, likeCount: optimisticCount }, ...current.filter((item) => item.id !== sound.id)])
-    } else {
+    } else if (sound.source === 'community') {
       setLikedSounds((current) => current.filter((item) => item.id !== sound.id))
     }
     try {
-      const result = await setCommunityLike(sound.id, nextLiked, user)
-      updateSoundLike(sound.id, result.liked, result.likeCount)
+      const result = sound.source === 'builtIn'
+        ? await setBuiltInLike(sound.id, nextLiked, user)
+        : await setCommunityLike(sound.id, nextLiked, user)
+      updateSoundLike(sound, result.liked, result.likeCount)
     } catch (error) {
-      updateSoundLike(sound.id, Boolean(sound.liked), previousCount)
-      if (nextLiked) setLikedSounds((current) => current.filter((item) => item.id !== sound.id))
-      else setLikedSounds((current) => [{ ...sound }, ...current.filter((item) => item.id !== sound.id)])
+      updateSoundLike(sound, Boolean(sound.liked), previousCount)
+      if (sound.source === 'community' && nextLiked) setLikedSounds((current) => current.filter((item) => item.id !== sound.id))
+      else if (sound.source === 'community') setLikedSounds((current) => [{ ...sound }, ...current.filter((item) => item.id !== sound.id)])
       setNotice(error instanceof Error ? error.message : 'いいねを保存できませんでした')
     }
   }
@@ -144,7 +154,7 @@ function App() {
 
       <section aria-label={SOUND_TABS.find((tab) => tab.id === activeTab)?.label} className="sound-grid" id="sound-grid" role="tabpanel">
         {visibleSounds.map((sound) => (
-          <SoundPad active={playingId === sound.id} key={sound.id} onLike={sound.source === 'community' ? () => void toggleLike(sound) : undefined} onPlay={() => void playSound(sound)} playKey={playingId === sound.id ? playKey : 0} sound={sound} />
+          <SoundPad active={playingId === sound.id} key={`${sound.source}-${sound.id}`} onLike={communityApiConfigured ? () => void toggleLike(sound) : undefined} onPlay={() => void playSound(sound)} playKey={playingId === sound.id ? playKey : 0} sound={sound} />
         ))}
         {emptyState && visibleSounds.length === 0 && (
           <div className="empty-library">
@@ -175,7 +185,7 @@ function getEmptyState(activeTab: SoundTabId, status: LibraryStatus, error: stri
   if (!communityApiConfigured) return { title: '共有基盤の接続待ち', detail: 'Cloudflareの公開URLを設定すると使えるようになります' }
   if (status === 'loading' || status === 'idle') return { title: '音源を読み込み中', detail: '少しだけお待ちください' }
   if (status === 'error') return { title: '投稿音源を読み込めません', detail: error }
-  if (activeTab === 'liked') return { title: 'いいねした音源はありません', detail: '投稿音源のハートを押すと、ここに保存されます' }
+  if (activeTab === 'liked') return { title: 'いいねした音源はありません', detail: '音源のハートを押すと、ここに保存されます' }
   return { title: '投稿音源はまだありません', detail: '誰かが投稿すると、ここにすぐ追加されます' }
 }
 

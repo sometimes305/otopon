@@ -1,10 +1,9 @@
-Interface Sounds (1.0)
+Music Jingles / RPG Audio / Casino Audio
 
-Created/distributed by Kenney (www.kenney.nl)
-Creation date: 11-02-2020
+Created and distributed by Kenney Vleugels (www.kenney.nl)
 
 License: Creative Commons Zero (CC0)
 https://creativecommons.org/publicdomain/zero/1.0/
 
-This content is free to use in personal, educational and commercial projects.
-Crediting Kenney or www.kenney.nl is appreciated but not mandatory.
+These assets may be used in personal and commercial projects.
+Credit to Kenney or www.kenney.nl is appreciated but not mandatory.

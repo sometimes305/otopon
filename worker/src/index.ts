@@ -31,6 +31,13 @@ interface AudioMetadata {
 const MAX_FILE_BYTES = 5 * 1024 * 1024
 const MAX_PENDING_PER_HOUR = 3
 const COLORS: SoundColor[] = ['coral', 'mint', 'amber', 'blue', 'violet', 'pink']
+const BUILTIN_SOUND_IDS = [
+  'tada', 'big-win', 'victory-8bit', 'level-up', 'item-get', 'game-over',
+  'too-bad', 'danger', 'reveal', 'decision', 'entrance', 'punchline',
+  'sparkle', 'success-8bit', 'fail-8bit', 'select-8bit', 'impact-don',
+  'impact-pon', 'zukeen', 'chime-hit', 'coins', 'dice', 'card-shuffle', 'metal-crash',
+] as const
+const BUILTIN_SOUND_ID_SET = new Set<string>(BUILTIN_SOUND_IDS)
 
 class HttpError extends Error {
   constructor(readonly status: number, message: string) {
@@ -73,6 +80,10 @@ async function route(request: Request, env: Env) {
     return listSounds(request, env)
   }
 
+  if (request.method === 'GET' && url.pathname === '/api/builtins/likes') {
+    return listBuiltInLikes(request, env)
+  }
+
   if (request.method === 'POST' && url.pathname === '/api/sounds') {
     requireAllowedWriteOrigin(request, env)
     return createSound(request, env)
@@ -85,6 +96,11 @@ async function route(request: Request, env: Env) {
   if (parts[0] === 'api' && parts[1] === 'sounds' && parts[2] && parts[3] === 'like' && request.method === 'PUT') {
     requireAllowedWriteOrigin(request, env)
     return setLike(request, env, parts[2])
+  }
+
+  if (parts[0] === 'api' && parts[1] === 'builtins' && parts[2] && parts[3] === 'like' && request.method === 'PUT') {
+    requireAllowedWriteOrigin(request, env)
+    return setBuiltInLike(request, env, parts[2])
   }
 
   if (parts[0] === 'api' && parts[1] === 'sounds' && parts[2] && parts[3] === 'report' && request.method === 'POST') {
@@ -177,6 +193,34 @@ async function createSound(request: Request, env: Env) {
   }
 
   return json({ id, status: 'approved', message: '投稿音源として公開しました' }, 201)
+}
+
+async function listBuiltInLikes(request: Request, env: Env) {
+  const userId = cleanHeader(request.headers.get('X-Gravity-User-Id'), 128)
+  const placeholders = BUILTIN_SOUND_IDS.map(() => '?').join(', ')
+  const result = await env.DB.prepare(`
+    SELECT sound_id, COUNT(*) AS like_count,
+      MAX(CASE WHEN user_id = ? THEN 1 ELSE 0 END) AS liked
+    FROM builtin_likes
+    WHERE sound_id IN (${placeholders})
+    GROUP BY sound_id
+  `).bind(userId || '', ...BUILTIN_SOUND_IDS).all<{ sound_id: string; like_count: number; liked: number }>()
+  return json({ likes: result.results.map((row) => ({ id: row.sound_id, likeCount: row.like_count, liked: Boolean(row.liked) })) })
+}
+
+async function setBuiltInLike(request: Request, env: Env, soundId: string) {
+  if (!BUILTIN_SOUND_ID_SET.has(soundId)) throw new HttpError(404, '初期音源が見つかりません')
+  const user = requireUser(request)
+  const body = await readJson<{ liked?: unknown }>(request)
+  if (typeof body.liked !== 'boolean') throw new HttpError(400, 'likedにはtrueかfalseを指定してください')
+  await upsertUser(env, user)
+  if (body.liked) {
+    await env.DB.prepare('INSERT OR IGNORE INTO builtin_likes (sound_id, user_id) VALUES (?, ?)').bind(soundId, user.id).run()
+  } else {
+    await env.DB.prepare('DELETE FROM builtin_likes WHERE sound_id = ? AND user_id = ?').bind(soundId, user.id).run()
+  }
+  const count = await env.DB.prepare('SELECT COUNT(*) AS count FROM builtin_likes WHERE sound_id = ?').bind(soundId).first<{ count: number }>()
+  return json({ liked: body.liked, likeCount: count?.count || 0 })
 }
 
 async function setLike(request: Request, env: Env, soundId: string) {

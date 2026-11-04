@@ -12,8 +12,24 @@ export async function listCommunitySounds(scope: 'community' | 'liked', user: Gr
   return data.sounds
 }
 
+export async function listBuiltInLikes(user: GravityUser) {
+  if (!API_BASE) return []
+  const response = await fetch(`${API_BASE}/api/builtins/likes`, { headers: userHeaders(user) })
+  const data = await readResponse<{ likes: Array<{ id: string; liked: boolean; likeCount: number }> }>(response)
+  return data.likes
+}
+
 export async function setCommunityLike(soundId: string, liked: boolean, user: GravityUser) {
   const response = await fetch(`${API_BASE}/api/sounds/${encodeURIComponent(soundId)}/like`, {
+    method: 'PUT',
+    headers: { ...userHeaders(user), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ liked }),
+  })
+  return readResponse<{ liked: boolean; likeCount: number }>(response)
+}
+
+export async function setBuiltInLike(soundId: string, liked: boolean, user: GravityUser) {
+  const response = await fetch(`${API_BASE}/api/builtins/${encodeURIComponent(soundId)}/like`, {
     method: 'PUT',
     headers: { ...userHeaders(user), 'Content-Type': 'application/json' },
     body: JSON.stringify({ liked }),
