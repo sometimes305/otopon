@@ -28,6 +28,13 @@ try {
   gcloud config set project $ProjectId
   gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com secretmanager.googleapis.com
 
+  $ActiveAccount = gcloud config get-value account
+  $ProjectNumber = gcloud projects describe $ProjectId --format="value(projectNumber)"
+  $RuntimeAccount = "$ProjectNumber-compute@developer.gserviceaccount.com"
+  gcloud projects add-iam-policy-binding $ProjectId --member="user:$ActiveAccount" --role="roles/cloudbuild.builds.editor" --condition=None
+  gcloud projects add-iam-policy-binding $ProjectId --member="user:$ActiveAccount" --role="roles/serviceusage.serviceUsageConsumer" --condition=None
+  gcloud projects add-iam-policy-binding $ProjectId --member="serviceAccount:$RuntimeAccount" --role="roles/cloudbuild.builds.builder" --condition=None
+
   $PSNativeCommandUseErrorActionPreference = $false
   gcloud artifacts repositories describe $Repository --location=$Region 2>$null
   $RepositoryExists = $LASTEXITCODE -eq 0
@@ -52,9 +59,9 @@ try {
   } else {
     gcloud secrets create $SecretName --replication-policy=automatic --data-file=$SecretValueFile
   }
+  $SecretVersion = gcloud secrets versions list $SecretName --filter="state:ENABLED" --sort-by="~createTime" --limit=1 --format="value(name)"
+  if (-not $SecretVersion) { throw "Secret Managerのバージョンを取得できませんでした" }
 
-  $ProjectNumber = gcloud projects describe $ProjectId --format="value(projectNumber)"
-  $RuntimeAccount = "$ProjectNumber-compute@developer.gserviceaccount.com"
   gcloud secrets add-iam-policy-binding $SecretName --member="serviceAccount:$RuntimeAccount" --role="roles/secretmanager.secretAccessor"
 
   gcloud run deploy $Service `
@@ -72,7 +79,7 @@ try {
     --cpu=1 `
     --memory=512Mi `
     --set-env-vars="START_ENGINE=0,VOICEVOX_URL=http://127.0.0.1:50021" `
-    --set-secrets="TTS_SECRET=$SecretName`:latest" `
+    --set-secrets="TTS_SECRET=$SecretName`:$SecretVersion" `
     --container=engine `
     --image="docker.io/voicevox/voicevox_engine:cpu-ubuntu22.04-0.26.1" `
     --cpu=2 `
