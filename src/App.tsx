@@ -127,6 +127,10 @@ function App() {
     setNotice('')
   }
 
+  const showCommunityLoading = communityApiConfigured
+    && activeTab === 'community'
+    && (libraryStatus === 'idle' || libraryStatus === 'loading')
+    && communitySounds.length === 0
   const emptyState = getEmptyState(activeTab, libraryStatus, libraryError)
 
   return (
@@ -152,11 +156,11 @@ function App() {
         </label>
       </section>
 
-      <section aria-label={SOUND_TABS.find((tab) => tab.id === activeTab)?.label} className="sound-grid" id="sound-grid" role="tabpanel">
-        {visibleSounds.map((sound) => (
+      <section aria-busy={showCommunityLoading} aria-label={SOUND_TABS.find((tab) => tab.id === activeTab)?.label} className="sound-grid" id="sound-grid" role="tabpanel">
+        {showCommunityLoading ? <CommunityLoading /> : visibleSounds.map((sound) => (
           <SoundPad active={playingId === sound.id} key={`${sound.source}-${sound.id}`} onLike={communityApiConfigured ? () => void toggleLike(sound) : undefined} onPlay={() => void playSound(sound)} playKey={playingId === sound.id ? playKey : 0} sound={sound} />
         ))}
-        {emptyState && visibleSounds.length === 0 && (
+        {!showCommunityLoading && emptyState && visibleSounds.length === 0 && (
           <div className="empty-library">
             {activeTab === 'liked' ? <HeartIcon /> : <AddIcon />}
             <strong>{emptyState.title}</strong>
@@ -177,6 +181,19 @@ function App() {
       {activeView === 'submit' && <SubmitSoundSheet onClose={() => setActiveView('box')} onSubmitted={() => { setActiveView('box'); setNotice('投稿しました。投稿音源からすぐ使えます'); if (user) void loadCommunity(user) }} user={user} />}
       {activeView === 'voice' && <VoiceSheet onClose={() => setActiveView('box')} />}
     </main>
+  )
+}
+
+function CommunityLoading() {
+  return (
+    <div className="library-loading" role="status">
+      <div className="library-loading-label"><span aria-hidden="true" />投稿音源を読み込み中</div>
+      <div aria-hidden="true" className="library-loading-grid">
+        {Array.from({ length: 6 }, (_, index) => (
+          <div className="sound-pad-skeleton" key={index}><i /><b /></div>
+        ))}
+      </div>
+    </div>
   )
 }
 
