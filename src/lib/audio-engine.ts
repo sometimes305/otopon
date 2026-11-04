@@ -1,4 +1,5 @@
 export class AudioEngine {
+  private static readonly MAX_OUTPUT_VOLUME = 0.3
   private context: AudioContext | null = null
   private master: GainNode | null = null
   private volume = 0.82
@@ -9,9 +10,9 @@ export class AudioEngine {
   setVolume(volume: number) {
     this.volume = Math.max(0, Math.min(1, volume))
     if (this.context && this.master) {
-      this.master.gain.setTargetAtTime(this.volume, this.context.currentTime, 0.015)
+      this.master.gain.setTargetAtTime(this.outputVolume, this.context.currentTime, 0.015)
     }
-    for (const media of this.activeMedia.keys()) media.volume = this.volume
+    for (const media of this.activeMedia.keys()) media.volume = this.outputVolume
   }
 
   async prepare() {
@@ -76,7 +77,7 @@ export class AudioEngine {
       if (!AudioContextClass) return null
       this.context = new AudioContextClass()
       this.master = this.context.createGain()
-      this.master.gain.value = this.volume
+      this.master.gain.value = this.outputVolume
       this.master.connect(this.context.destination)
     }
     return this.context
@@ -99,7 +100,7 @@ export class AudioEngine {
     const media = document.createElement('audio')
     media.src = url
     media.preload = 'auto'
-    media.volume = this.volume
+    media.volume = this.outputVolume
     media.hidden = true
     document.body.append(media)
 
@@ -146,5 +147,9 @@ export class AudioEngine {
       })
     this.buffers.set(url, request)
     return request
+  }
+
+  private get outputVolume() {
+    return this.volume * AudioEngine.MAX_OUTPUT_VOLUME
   }
 }
