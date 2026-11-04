@@ -170,6 +170,11 @@ function App() {
         )}
       </section>
 
+      <p className="sound-credit">
+        効果音：<a href="https://otologic.jp/" rel="noreferrer" target="_blank">OtoLogic</a>
+        （<a href="https://creativecommons.org/licenses/by/4.0/deed.ja" rel="noreferrer" target="_blank">CC BY 4.0</a>）
+      </p>
+
       {notice && <p className="notice" role="status">{notice}</p>}
 
       <nav className="bottom-nav" aria-label="メインメニュー">
